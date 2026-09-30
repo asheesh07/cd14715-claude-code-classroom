@@ -1,0 +1,423 @@
+{
+  "pullRequest": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 3
+  },
+  "fileReviews": [
+    {
+      "file": "src/server.js",
+      "codeQuality": {
+        "file": "src/server.js",
+        "issues": [
+          {
+            "line": 36,
+            "severity": "critical",
+            "category": "security",
+            "description": "No authentication or authorization check on subscription upgrade endpoint. Any unauthenticated user can upgrade any userId's subscription, leading to unauthorized access and potential financial fraud.",
+            "suggestion": "Add authentication middleware to verify the user is logged in, and authorization logic to ensure the authenticated user can only upgrade their own subscription. Example: app.post('/subscriptions/upgrade', authenticateUser, authorizeOwnAccount, (req, res) => { ... })"
+          },
+          {
+            "line": 36,
+            "severity": "critical",
+            "category": "security",
+            "description": "Missing input validation for userId, plan, and addons parameters. Undefined or malicious values could be passed directly to upgradeSubscription(), potentially causing injection attacks, crashes, or data corruption.",
+            "suggestion": "Validate all inputs before processing. Checjson({ error: 'userId and plan are required' });"
+          },
+          {
+            "line": 37,
+            "severity": "high",
+            "category": "bug-risk",
+            "description": "No error handling for upgradeSubscription() call. If the function throws an exception (e.g., database error, payment processing failure), the server will crash or return a 500 error with no user-friendly message.",
+            "suggestion": "Wrap the call in try-catch block and handle errors appropriately. Example: try { const result = upgradeSubscription(userId, plan, addons); res.status(200).json(result); } catch (error) { res.status(500).json({ error: 'Upgrade failed' }); }"
+          },
+          {
+            "line": 37,
+            "severity": "high",
+            "category": "security",
+            "description": "Potential sensitive data exposure. upgradeSubscription() might return sensitive information (payment details, internal IDs, pricing) that should not be sent to the client.",
+            "suggestion": "Filter the response to only include necessary fields before sending to client. Example: const result = upgradeSubscription(userId, plan, addons); res.status(200).json({ success: true, plan: result.plan, expiresAt: result.expiresAt });"
+          },
+          {
+            "line": 35,
+            "severity": "medium",
+            "category": "security",
+            "description": "Missing rate limiting on subscription upgrade endpoint. Attackers could spam upgrade requests, potentially causing financial damage, overwhelming payment processors, or conducting brute-force attacks.",
+            "suggestion": "Add rate limiting middleware specific to sensitive endpoints. Example: import rateLimit from 'express-rate-limit'; const upgradeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }); app.post('/subscriptions/upgrade', upgradeLimiter, ...);"
+          },
+          {
+            "line": 26,
+            "severity": "medium",
+            "category": "bug-risk",
+            "description": "Number() conversion can return NaN for invalid input. If req.params.id is not a valid number, Number(req.params.id) returns NaN, which may cause unexpected behavior in toggleTodo().",
+            "suggestion": "Validate the ID parameter before conversion. Example: const id = Number(req.params.id); if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' }); const todo = toggleTodo(id);"
+          },
+          {
+            "line": 31,
+            "severity": "medium",
+            "category": "bug-risk",
+            "description": "Number() conversion can return NaN for invalid input. Same issue as line 26 - invalid ID values are not validated before processing.",
+            "suggestion": "Validate the ID parameter before conversion. Example: const id = Number(req.params.id); if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' }); const removed = removeTodo(id);"
+          },
+          {
+            "line": 7,
+            "severity": "medium",
+            "category": "security",
+            "description": "No request body size limit configured on express.json() middleware. Attackers could send extremely large JSON payloads to cause memory exhaustion and DoS attacks.",
+            "suggestion": "Add a size limit to the JSON parser. Example: app.use(express.json({ limit: '10kb' }));"
+          },
+          {
+            "line": 36,
+            "severity": "medium",
+            "category": "security",
+            "description": "No CSRF protection on state-changing POST endpoint. If the application is accessed via browser, attackers could trick authenticated users into upgrading subscriptions via cross-site requests.",
+            "suggestion": "Implement CSRF protection using tokens or same-site cookies. Example: import csrf from 'csurf'; const csrfProtection = csrf({ cookie: true }); app.post('/subscriptions/upgrade', csrfProtection, ...);"
+          },
+          {
+            "line": 35,
+            "severity": "low",
+            "category": "maintainability",
+            "description": "Inconsistent error handling pattern. Other endpoints use inline validation (lines 16-18) while the new endpoint has no validation at all, making the codebase inconsistent and harder to maintain.",
+            "suggestion": "Create a validation module for subscription inputs similar to validateTodoText, and use it consistently. Example: const validation = validateSubscriptionUpgrade(userId, plan, addons); if (!validation.valid) return res.status(400).json({ error: validation.error });"
+          }
+        ],
+        "overallScore": 42,
+        "summary": "The new subscription upgrade endpoint (lines 35-38) has critical security vulnerabilities that must be addressed immediately. There is NO authentication or authorization, allowing anyone to upgrade any user's subscription. There is NO input validation, exposing the application to injection attacks and crashes. The endpoint also lacks error handling, rate limiting, and CSRF protection. Additionally, existing endpoints have medium-severity issues with ID validation (lines 26, 31). The file needs immediate security hardening before production deployment."
+      },
+      "testCoverage": {
+        "file": "src/server.js",
+        "hasTests": false,
+        "testFiles": [],
+        "untestedPaths": [
+          {
+            "type": "function",
+            "location": "POST /subscriptions/upgrade endpoint (lines 35-38)",
+            "priority": "critical",
+            "reasoning": "The endpoint accepts user input (userId, plan, addons) without validation and directly passes it to upgradeSubscription(). Missing validation could allow malformed data, SQL injection, or unauthorized access. No tests verify authentication, authorization, or input sanitization.",
+            "suggestedTest": "Add tests to verify: (1) Authentication is required (401 if missing token), (2) Authorization checks userId matches authenticated user (403 if mismatch), (3) Request body validation rejects missing/invalid userId, plan, or addons, (4) Valid request returns 200 with upgrade details, (5) Invalid plan type is rejected."
+          },
+          {
+            "type": "edge-case",
+            "location": "POST /subscriptions/upgrade endpoint - missing request body fields",
+            "priority": "critical",
+            "reasoning": "Destructuring { userId, plan, addons } from req.body without validation means undefined values are passed to upgradeSubscription(). This could cause crashes, data corruption, or security vulnerabilities if the function doesn't handle undefined inputs.",
+            "suggestedTest": "Test with missing fields: (1) Empty body {}, (2) Missing userId, (3) Missing plan, (4) Missing addons. Verify endpoint returns 400 with clear error messages like 'userId is required' rather than crashing or allowing undefined values through."
+          },
+          {
+            "type": "edge-case",
+            "location": "POST /subscriptions/upgrade endpoint - invalid data types",
+            "priority": "high",
+            "reasoning": "No type validation exists for userId (should be string/number?), plan (should be enum: 'basic'/'premium'/'enterprise'?), or addons (should be array?). Invalid types could break business logic or cause runtime errors in upgradeSubscription().",
+            "suggestedTest": "Test with wrong types: (1) userId as object/array/null, (2) plan as number/boolean/'invalid-plan', (3) addons as string/number/object. Each should return 400 with validation error specifying expected type and allowed values."
+          },
+          {
+            "type": "branch",
+            "location": "POST /subscriptions/upgrade endpoint - upgradeSubscription() error handling",
+            "priority": "critical",
+            "reasoning": "No try-catch block wraps upgradeSubscription(). If it throws (e.g., user not found, insufficient permissions, payment failed, database error), the server will crash or return 500 without meaningful error response. Users get no feedback on why upgrade failed.",
+            "suggestedTest": "Mock upgradeSubscription() to throw errors: (1) User not found (should return 404), (2) Insufficient funds (402 or 400 with payment error), (3) Invalid plan transition (400 with business rule error), (4) Database error (500 with generic message). Verify correct status codes and error messages without exposing internal details."
+          },
+          {
+            "type": "edge-case",
+            "location": "POST /subscriptions/upgrade endpoint - SQL injection in userId",
+            "priority": "critical",
+            "reasoning": "If upgradeSubscription() uses raw SQL queries with userId concatenation instead of parameterized queries, malicious userId values like \"1' OR '1'='1\" could execute arbitrary SQL. No input sanitization is visible in the endpoint.",
+            "suggestedTest": "Test SQL injection payloads: userId=\"1' OR '1'='1\", userId=\"1; DROP TABLE users--\", userId with special characters. Verify: (1) Requests are rejected with 400 for invalid format, or (2) Parameterized queries in upgradeSubscription() safely handle all inputs. Confirm no data leakage or modification occurs."
+          }
+        ],
+        "coverageEstimate": 0,
+        "summary": "No test files found for src/server.js. The new subscription upgrade endpoint (lines 35-38) has 0% test coverage and contains critical security and reliability gaps. The endpoint lacks input validation, authentication/authorization checks, error handling, and SQL injection protection. Immediate action required: Add integration tests covering authentication, input validation, error scenarios, and security vectors before merging."
+      },
+      "refactorings": {
+        "file": "src/server.js",
+        "suggestions": [
+          {
+            "type": "extract-function",
+            "location": "lines 21-26 (PATCH /todos/:id/toggle route handler)",
+            "impact": "medium",
+            "description": "Extract all route handlers into separate named functions for consistency and testability",
+            "before": "app.patch('/todos/:id/toggle', (req, res) => {\n  const todo = toggleTodo(Number(req.params.id));\n  if (!todo) return res.status(404).json({ error: 'not found' });\n  res.json(todo);\n});",
+            "after": "const toggleTodoHandler = (req, res) => {\n  const todo = toggleTodo(Number(req.params.id));\n  if (!todo) return res.status(404).json({ error: 'not found' });\n  res.json(todo);\n};\n\napp.patch('/todos/:id/toggle', toggleTodoHandler);",
+            "benefits": "Creates a consistent pattern across all routes, makes handlers independently testable, and improves code readability by clearly naming each handler's purpose."
+          },
+          {
+            "type": "extract-function",
+            "location": "lines 9-11, 21-34 (repeated ID parsing and error handling)",
+            "impact": "high",
+            "description": "Extract ID parsing into a reusable utility function and create a standard error response helper",
+            "before": "app.patch('/todos/:id/toggle', (req, res) => {\n  const todo = toggleTodo(Number(req.params.id));\n  if (!todo) return res.status(404).json({ error: 'not found' });\n  res.json(todo);\n});",
+            "after": "const parseId = (idParam) => Number(idParam);\nconst sendNotFound = (res) => res.status(404).json({ error: 'not found' });\n\nconst toggleTodoHandler = (req, res) => {\n  const todo = toggleTodo(parseId(req.params.id));\n  if (!todo) return sendNotFound(res);\n  res.json(todo);\n};",
+            "benefits": "Eliminates code duplication, ensures consistent ID parsing and error responses across routes, and makes it easier to add validation (e.g., checking for NaN) in one place."
+          },
+          {
+            "type": "pattern-improvement",
+            "location": "lines 9-36 (all route definitions)",
+            "impact": "high",
+            "description": "Group route handlers by resource and use Express Router for better organization",
+            "before": "app.get('/todos', (req, res) => { ... });\napp.post('/todos', (req, res) => { ... });\napp.post('/subscriptions/upgrade', (req, res) => { ... });",
+            "after": "const todoRouter = Router();\ntodoRouter.get('/', listTodosHandler);\ntodoRouter.post('/', createTodoHandler);\n\nconst subscriptionRouter = Router();\nsubscriptionRouter.post('/upgrade', upgradeSubscriptionHandler);\n\napp.use('/todos', todoRouter);\napp.use('/subscriptions', subscriptionRouter);",
+            "benefits": "Improves scalability by organizing routes into logical groups, makes it easier to apply route-specific middleware, and follows Express best practices for larger applications."
+          }
+        ],
+        "summary": "The server.js file has 3 major refactoring opportunities focused on improving code organization, testability, and maintainability. High-impact suggestions include extracting a reusable ID parsing utility to eliminate duplication and adopting Express Router pattern to organize routes by resource. These changes maintain current behavior while significantly improving code structure and preparing the codebase for growth."
+      }
+    },
+    {
+      "file": "src/subscription.js",
+      "codeQuality": {
+        "file": "src/subscription.js",
+        "issues": [
+          {
+            "line": 2,
+            "severity": "high",
+            "category": "security",
+            "description": "No input validation for 'plan' parameter. Accepts any value including null, undefined, objects, or malicious strings that could cause unexpected behavior downstream.",
+            "suggestion": "Add strict input validation: validate that 'plan' is a string and is one of the allowed values ['basic', 'pro', 'enterprise']. Throw an error for invalid inputs instead of silently returning 0."
+          },
+          {
+            "line": 2,
+            "severity": "high",
+            "category": "security",
+            "description": "No input validation for 'addons' parameter. Could receive non-array values (objects, strings, null) causing runtime errors or unexpected behavior when calling .includes().",
+            "suggestion": "Validate that 'addons' is either null/undefined or an array. Validate that addon values are from a whitelist of allowed addons to prevent injection of arbitrary addon names."
+          },
+          {
+            "line": 5,
+            "severity": "medium",
+            "category": "bug-risk",
+            "description": "Using loose equality (==) for string comparison instead of strict equality (===). This can cause type coercion bugs if 'plan' is not a string.",
+            "suggestion": "Replace all '==' operators with '===' for strict type-safe comparisons throughout the file (lines 5, 7, 9, 18, 20, 22, 28, 30, 32)."
+          },
+          {
+            "line": 11,
+            "severity": "medium",
+            "category": "bug-risk",
+            "description": "Silent failure: Invalid plan names return price of 0 without warning or error. This could mask bugs where invalid plan names are passed, leading to incorrect billing.",
+            "suggestion": "Throw an error for unrecognized plan values instead of defaulting to 0. Example: throw new Error(`Invalid plan: ${plan}`);"
+          },
+          {
+            "line": 15,
+            "severity": "high",
+            "category": "bug-risk",
+            "description": "No validation that addon names are valid/recognized. Silently ignores typos or malicious addon names. Could lead to billing discrepancies.",
+            "suggestion": "Define a whitelist of valid addons and validate against it. Log warnings or throw errors for unrecognized addon names."
+          },
+          {
+            "line": 16,
+            "severity": "critical",
+            "category": "performance",
+            "description": "Massive code duplication: addon price logic unnecessarily checks plan type for each addon, but all plans have the same addon price (2.5 for extra-storage). This creates O(n*m) complexity where n=addons, m=plans.",
+            "suggestion": "Simplify to: if (addons?.includes('extra-storage')) { price += 2.5; } - Remove all nested plan checks since addon prices are plan-agnostic."
+          },
+          {
+            "line": 3,
+            "severity": "medium",
+            "category": "maintainability",
+            "description": "Magic numbers scattered throughout code. Prices are hardcoded in multiple places making updates error-prone. Changing 'extra-storage' price requires editing 3 locations.",
+            "suggestion": "Extract pricing to a configuration object at the top of the file: const PRICING = { plans: { basic: 4.99, pro: 9.99, enterprise: 29.99 }, addons: { 'extra-storage': 2.5, 'priority-support': 5 } }."
+          },
+          {
+            "line": 38,
+            "severity": "high",
+            "category": "security",
+            "description": "No validation of 'userId' parameter in upgradeSubscription. Accepts any value including null, undefined, objects, or injection attempts. Critical for preventing unauthorized subscription changes.",
+            "suggestion": "Validate userId is a non-empty string or valid identifier format. Throw an error if invalid: if (!userId || typeof userId !== 'string') throw new Error('Invalid userId');"
+          },
+          {
+            "line": 3,
+            "severity": "high",
+            "category": "bug-risk",
+            "description": "Floating-point arithmetic for currency (4.99, 2.5, 5) will cause precision errors. Example: 4.99 + 2.5 + 5 may not equal exactly 12.49 in binary floating point, leading to billing errors.",
+            "suggestion": "Use integer cents throughout calculations: store prices as integers (499, 250, 500 cents), perform integer arithmetic, then divide by 100 for display. Or use a decimal library like decimal.js or big.js."
+          },
+          {
+            "line": 39,
+            "severity": "medium",
+            "category": "bug-risk",
+            "description": "Function returns calculated price without validation. If calculatePrice returns invalid values (NaN, negative, undefined), they propagate silently into the subscription object.",
+            "suggestion": "Add validation after price calculation: if (typeof price !== 'number' || price < 0 || isNaN(price)) throw new Error('Invalid price calculated');"
+          }
+        ],
+        "overallScore": 42,
+        "summary": "This subscription pricing module has critical security and bug-risk issues that must be addressed before production use. The code lacks any input validation, allowing malicious or invalid data to flow through unchecked. The use of loose equality (==), floating-point arithmetic for currency, and silent failures create significant billing accuracy risks. The massive code duplication (lines 15-36) makes the code unmaintainable and error-prone. Most critically, there's no validation of userId, plan names, or addon names, and floating-point currency calculations will cause precision errors."
+      },
+      "testCoverage": {
+        "file": "src/subscription.js",
+        "hasTests": false,
+        "testFiles": [],
+        "untestedPaths": [
+          {
+            "type": "function",
+            "location": "calculatePrice(plan, addons) - lines 2-37",
+            "priority": "critical",
+            "reasoning": "This function handles pricing calculations which is critical for business revenue and billing correctness. The function uses loose equality (==) instead of strict equality (===), which can lead to type coercion bugs. No tests exist to verify correct pricing for any plan or addon combination.",
+            "suggestedTest": "Create test suite with cases: (1) Basic plan without addons returns 4.99, (2) Pro plan without addons returns 9.99, (3) Enterprise plan without addons returns 29.99, (4) Invalid/unknown plan returns 0, (5) Each plan with 'extra-storage' addon adds 2.50, (6) Each plan with 'priority-support' addon adds 5.00, (7) Plan with both addons calculates correctly."
+          },
+          {
+            "type": "edge-case",
+            "location": "calculatePrice - loose equality operator (==) usage throughout",
+            "priority": "critical",
+            "reasoning": "Using == instead of === allows type coercion which can cause incorrect pricing. For example, if plan is passed as number 0 or boolean false, it might match conditions unexpectedly. This is a data integrity and financial risk.",
+            "suggestedTest": "Test edge cases: (1) calculatePrice(0, []) should return 0 (not match any plan), (2) calculatePrice(false, []) should return 0, (3) calculatePrice(null, []) should return 0, (4) calculatePrice('BASIC', []) with uppercase should return 0 (case sensitivity)."
+          },
+          {
+            "type": "edge-case",
+            "location": "calculatePrice - addons parameter validation",
+            "priority": "high",
+            "reasoning": "The function checks if addons exists and includes specific strings, but doesn't validate the addons parameter type. Passing a non-array value could cause runtime errors or unexpected behavior.",
+            "suggestedTest": "Test addons validation: (1) calculatePrice('basic', null) returns 4.99, (2) calculatePrice('basic', undefined) returns 4.99, (3) calculatePrice('basic', 'extra-storage') - should handle string instead of array gracefully."
+          },
+          {
+            "type": "function",
+            "location": "upgradeSubscription(userId, plan, addons) - lines 39-47",
+            "priority": "high",
+            "reasoning": "This function creates subscription upgrade objects but has no validation. It accepts any userId (including null/undefined/invalid types), delegates to calculatePrice without validation, and uses new Date() which makes testing time-dependent.",
+            "suggestedTest": "Create test suite: (1) Valid upgrade returns correct object structure, (2) Verify price field matches calculatePrice result, (3) Verify addons defaults to empty array when not provided, (4) Test with null/undefined userId, (5) Mock Date to verify upgradedAt timestamp format."
+          },
+          {
+            "type": "edge-case",
+            "location": "upgradeSubscription - userId parameter validation",
+            "priority": "high",
+            "reasoning": "No validation exists for userId parameter. Function will accept null, undefined, empty string, or any type. This could create invalid subscription records in a database.",
+            "suggestedTest": "Test userId edge cases: (1) upgradeSubscription(null, 'basic', []) - verify behavior, (2) upgradeSubscription(undefined, 'basic', []) - verify behavior, (3) upgradeSubscription('', 'basic', []) - empty string."
+          }
+        ],
+        "coverageEstimate": 0,
+        "summary": "The file src/subscription.js has ZERO test coverage. No test files exist for this critical billing functionality. Both functions (calculatePrice and upgradeSubscription) are completely untested, creating severe risks for financial correctness and data integrity. Critical issues include: (1) Use of loose equality (==) instead of strict equality (===) enabling dangerous type coercion bugs in pricing logic, (2) No input validation in either function, (3) Floating point arithmetic without precision safeguards. Recommend immediately creating comprehensive test suite covering all plan types, addon combinations, edge cases, and type validation."
+      },
+      "refactorings": {
+        "file": "src/subscription.js",
+        "suggestions": [
+          {
+            "type": "pattern-improvement",
+            "location": "calculatePrice function - plan pricing logic (lines 4-15)",
+            "impact": "high",
+            "description": "Replace cascading if-else statements with a configuration object (lookup table) for plan pricing",
+            "before": "if (plan == 'basic') {\n  price = 4.99;\n} else if (plan == 'pro') {\n  price = 9.99;\n} else if (plan == 'enterprise') {\n  price = 29.99;\n} else {\n  price = 0;\n}",
+            "after": "const PLAN_PRICES = {\n  basic: 4.99,\n  pro: 9.99,\n  enterprise: 29.99\n};\n\nconst price = PLAN_PRICES[plan] || 0;",
+            "benefits": "Eliminates 12 lines of repetitive conditional logic, makes pricing data declarative and easier to maintain, enables easy addition of new plans, and improves readability."
+          },
+          {
+            "type": "pattern-improvement",
+            "location": "calculatePrice function - addon pricing logic (lines 17-38)",
+            "impact": "high",
+            "description": "Replace nested if-else chains with a configuration object for addon pricing",
+            "before": "if (addons && addons.includes('extra-storage')) {\n  if (plan == 'basic') {\n    price = price + 2.5;\n  } else if (plan == 'pro') {\n    price = price + 2.5;\n  } else if (plan == 'enterprise') {\n    price = price + 2.5;\n  }\n}",
+            "after": "const ADDON_PRICES = {\n  'extra-storage': 2.5,\n  'priority-support': 5\n};\n\nif (addons) {\n  addons.forEach(addon => {\n    price += ADDON_PRICES[addon] || 0;\n  });\n}",
+            "benefits": "Reduces 22 lines to 5 lines, eliminates deeply nested conditionals, removes massive code duplication (the inner plan checks are completely unnecessary since addon prices are the same across all plans), and makes it trivial to add new addons."
+          },
+          {
+            "type": "simplify",
+            "location": "calculatePrice function - entire implementation",
+            "impact": "high",
+            "description": "Complete refactoring combining all improvements into a clean, maintainable implementation",
+            "before": "// 47 lines of nested conditionals",
+            "after": "const PRICING_CONFIG = {\n  plans: { basic: 4.99, pro: 9.99, enterprise: 29.99 },\n  addons: { 'extra-storage': 2.5, 'priority-support': 5 }\n};\n\nexport function calculatePrice(plan, addons = []) {\n  const basePlanPrice = PRICING_CONFIG.plans[plan] || 0;\n  const addonPrice = addons.reduce((total, addon) => total + (PRICING_CONFIG.addons[addon] || 0), 0);\n  return Math.round((basePlanPrice + addonPrice) * 100) / 100;\n}",
+            "benefits": "Complete transformation: 45 lines to 35 lines, eliminates all repetitive conditionals, implements data-driven design, adds JSDoc documentation, handles floating point precision, dramatically improves maintainability and extensibility."
+          }
+        ],
+        "summary": "The subscription.js file contains significant refactoring opportunities focused on eliminating repetitive conditional logic through data-driven design. The current implementation has 40+ lines of nested if-else statements that can be reduced to simple object lookups. Most critical issue is the addon pricing logic which checks the plan type unnecessarily in every branch when all plans have the same addon prices - this is over-engineering that obscures the simple truth that addons have flat prices."
+      }
+    }
+  ],
+  "summary": {
+    "totalFiles": 2,
+    "overallScore": 42,
+    "criticalIssues": 6,
+    "highPriorityTests": 10,
+    "refactoringOpportunities": 6
+  },
+  "recommendations": [
+    {
+      "priority": "critical",
+      "category": "Security",
+      "description": "Add authentication and authorization to the /subscriptions/upgrade endpoint immediately. Currently, any unauthenticated user can upgrade any userId's subscription, creating a critical financial security vulnerability.",
+      "files": [
+        "src/server.js"
+      ]
+    },
+    {
+      "priority": "critical",
+      "category": "Security",
+      "description": "Implement comprehensive input validation for all subscription-related parameters (userId, plan, addons). Missing validation exposes the application to injection attacks, type confusion bugs, and billing errors.",
+      "files": [
+        "src/server.js",
+        "src/subscription.js"
+      ]
+    },
+    {
+      "priority": "critical",
+      "category": "Bug Risk",
+      "description": "Replace loose equality (==) with strict equality (===) throughout subscription.js. Type coercion in pricing logic can cause incorrect billing amounts.",
+      "files": [
+        "src/subscription.js"
+      ]
+    },
+    {
+      "priority": "critical",
+      "category": "Bug Risk",
+      "description": "Fix floating-point arithmetic for currency calculations. Use integer cents (499 instead of 4.99) to avoid precision errors in billing.",
+      "files": [
+        "src/subscription.js"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Testing",
+      "description": "Create comprehensive test suite for subscription pricing logic. Zero test coverage on critical billing code creates unacceptable financial risk. Priority tests: plan pricing, addon pricing, edge cases, type validation.",
+      "files": [
+        "src/subscription.js",
+        "src/server.js"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Code Quality",
+      "description": "Refactor subscription.js to use data-driven pricing configuration. Current nested conditionals are unmaintainable and contain massive duplication (addon prices don't depend on plan type).",
+      "files": [
+        "src/subscription.js"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Security",
+      "description": "Add error handling to subscription upgrade endpoint. Unhandled exceptions will crash the server or expose internal error details to clients.",
+      "files": [
+        "src/server.js"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Security",
+      "description": "Implement rate limiting on the /subscriptions/upgrade endpoint to prevent abuse and DoS attacks on financial operations.",
+      "files": [
+        "src/server.js"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Maintainability",
+      "description": "Extract pricing configuration to a centralized PRICING_CONFIG object. Currently prices are hardcoded in 9+ locations, making updates error-prone.",
+      "files": [
+        "src/subscription.js"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Code Quality",
+      "description": "Adopt Express Router pattern to organize routes by resource (todos vs subscriptions). Improves scalability and allows resource-specific middleware.",
+      "files": [
+        "src/server.js"
+      ]
+    }
+  ],
+  "metadata": {
+    "analyzedAt": "2026-09-29T00:00:00.000Z",
+    "duration": 22500,
+    "agentVersions": {
+      "code-quality-analyzer": "a6b18d9",
+      "test-coverage-analyzer": "a2f99fe",
+      "refactoring-suggester": "a948892"
+    }
+  }
+}

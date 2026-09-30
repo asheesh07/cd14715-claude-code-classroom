@@ -9,6 +9,7 @@ export const testCoverageAnalyzer: AgentDefinition = {
   'Read',
   'Grep',
   'Glob',
+  'Skill',
   'mcp__github__*'
 ],
   model: 'inherit'
